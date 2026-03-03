@@ -1,37 +1,79 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+from urllib.parse import urljoin, urlparse
 
 import httpx
+from bs4 import BeautifulSoup
 
 from freelance_ai.core.models import OrderIn
 from freelance_ai.platforms.base import BasePlatform
-from freelance_ai.platforms.freelancehunt.parser import parse_job_cards
 
 logger = logging.getLogger(__name__)
+
+PROJECTS_URL = "https://freelancehunt.com/projects"
+
+
+async def fetch_projects() -> list[dict]:
+    """Fetch project cards from Freelancehunt projects list page.
+
+    This function intentionally parses only the listing page and does not
+    request project detail pages.
+    """
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            response = await client.get(PROJECTS_URL)
+            response.raise_for_status()
+    except Exception as exc:
+        logger.warning("Freelancehunt fetch failed: %s", exc)
+        return []
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    table = soup.select_one("table.project-list")
+    if not table:
+        logger.info("Freelancehunt: parsed 0 projects (table.project-list not found)")
+        return []
+
+    projects: list[dict] = []
+    seen_ids: set[str] = set()
+
+    for link in table.select('a[href*="/project/"]'):
+        href = (link.get("href") or "").strip()
+        if not href:
+            continue
+
+        absolute_url = urljoin(PROJECTS_URL, href)
+        path = urlparse(absolute_url).path.rstrip("/")
+        last_segment = path.split("/")[-1] if path else ""
+        external_id = last_segment.replace(".html", "")
+        if not external_id or external_id in seen_ids:
+            continue
+
+        title = (link.get("title") or link.get_text(" ", strip=True) or "Untitled").strip()
+        seen_ids.add(external_id)
+
+        projects.append(
+            {
+                "external_id": external_id,
+                "title": title,
+                "url": absolute_url,
+                "description": title,
+                "budget": None,
+                "platform": "freelancehunt",
+            }
+        )
+
+    logger.info("Freelancehunt: parsed %d projects", len(projects))
+    return projects
 
 
 class FreelancehuntPlatform(BasePlatform):
     platform_name = "freelancehunt"
-    public_jobs_url = "https://freelancehunt.com/projects"
 
     async def fetch_orders(self) -> list[dict]:
-        """Fetch raw projects from public pages.
-
-        Placeholder strategy:
-        - gracefully return [] on any failure
-        - no auth/login needed
-        TODO: implement robust pagination and anti-bot handling.
-        """
-
-        try:
-            async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-                response = await client.get(self.public_jobs_url)
-                response.raise_for_status()
-                return parse_job_cards(response.text)
-        except Exception as exc:
-            logger.warning("Freelancehunt fetch failed: %s", exc)
-            return []
+        return await fetch_projects()
 
     def parse(self, raw: dict) -> OrderIn:
         return OrderIn(
@@ -44,3 +86,8 @@ class FreelancehuntPlatform(BasePlatform):
             currency=raw.get("currency"),
             language="ua",
         )
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
+    asyncio.run(fetch_projects())
