@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import logging
+
 from freelance_ai.core.models import OrderAnalysis, OrderIn
 from freelance_ai.core.scorer import estimate_hours_range, estimate_price_range
+
+logger = logging.getLogger(__name__)
 
 
 HIGH_COMPLEXITY_KEYWORDS = {
@@ -41,8 +45,54 @@ STACK_KEYWORDS = {
     "wordpress",
 }
 
+CODING_KEYWORDS = [
+    "python",
+    "django",
+    "fastapi",
+    "backend",
+    "frontend",
+    "react",
+    "node",
+    "api",
+    "javascript",
+    "typescript",
+    "flask",
+    "sql",
+    "database",
+    "scraper",
+    "bot",
+    "automation",
+    "ai",
+    "ml",
+    "devops",
+]
+MARKETING_KEYWORDS = ["seo", "marketing", "smm", "ads"]
+TRANSLATION_KEYWORDS = ["translation", "translate", "перевод", "переклад"]
 
-def analyze_order(order: OrderIn, hourly_rate_eur: int, default_language: str = "en") -> OrderAnalysis:
+_skipped_projects_count = 0
+
+
+def detect_category(title: str, description: str) -> str:
+    text = f"{title} {description}".lower()
+
+    if any(keyword in text for keyword in CODING_KEYWORDS):
+        return "coding"
+    if any(keyword in text for keyword in MARKETING_KEYWORDS):
+        return "marketing"
+    if any(keyword in text for keyword in TRANSLATION_KEYWORDS):
+        return "translation"
+    return "other"
+
+
+def analyze_order(order: OrderIn, hourly_rate_eur: int, default_language: str = "en") -> OrderAnalysis | None:
+    global _skipped_projects_count
+
+    category = detect_category(order.title, order.description)
+    if category != "coding":
+        _skipped_projects_count += 1
+        logger.info("Skipped non-coding projects: %d", _skipped_projects_count)
+        return None
+
     text = f"{order.title} {order.description}".lower()
 
     difficulty = 2
