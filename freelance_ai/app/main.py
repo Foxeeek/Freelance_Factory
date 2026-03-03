@@ -5,7 +5,7 @@ import logging
 
 from freelance_ai.app.config import get_settings
 from freelance_ai.app.database import init_db
-from freelance_ai.bot.handlers import build_bot_handlers
+from freelance_ai.bot.handlers import build_bot_handlers, configure_bot_commands
 from freelance_ai.bot.telegram_bot import TelegramNotifier
 from freelance_ai.services.scheduler import OrderScheduler
 
@@ -27,6 +27,7 @@ async def run() -> None:
     await scheduler.fetch_and_notify()
 
     await app.initialize()
+    await configure_bot_commands(app.bot)
     await app.start()
     await app.updater.start_polling()
 

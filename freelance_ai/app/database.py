@@ -33,6 +33,6 @@ def get_session() -> Iterator[Session]:
 
 def init_db() -> None:
     # Import models for metadata registration.
-    from freelance_ai.core.models import OrderDB  # noqa: F401
+    from freelance_ai.core.models import OrderDB, Settings  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
