@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import Bot, BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     CallbackQueryHandler,
     CommandHandler,
@@ -25,8 +25,23 @@ logger = logging.getLogger(__name__)
 AWAITING_MIN_BUDGET_KEY = "awaiting_min_budget"
 
 
+async def configure_bot_commands(bot: Bot) -> None:
+    await bot.set_my_commands(
+        [
+            BotCommand(command="start", description="Start bot"),
+            BotCommand(command="status", description="Show status"),
+            BotCommand(command="filter", description="Set minimum budget"),
+            BotCommand(command="help", description="Show help"),
+        ]
+    )
+
+
 def build_bot_handlers() -> list:
     return [
+        CommandHandler("start", start_command),
+        CommandHandler("help", help_command),
+        CommandHandler("status", status_command),
+        CommandHandler("filter", filter_command),
         CommandHandler("settings", settings_command),
         CallbackQueryHandler(handle_decision, pattern=r"^(approve|reject):\d+$"),
         CallbackQueryHandler(handle_settings_callback, pattern=r"^(toggle_budget_filter|set_min_budget)$"),
@@ -34,10 +49,72 @@ def build_bot_handlers() -> list:
     ]
 
 
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.effective_message:
+        return
+
+    logger.info("Received command: %s", update.effective_message.text)
+    await update.effective_message.reply_text("Bot is running.")
+
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.effective_message:
+        return
+
+    logger.info("Received command: %s", update.effective_message.text)
+    await update.effective_message.reply_text(
+        "Available commands:\n"
+        "/start - Start bot\n"
+        "/status - Show bot status\n"
+        "/filter <number> - Set minimum budget filter (EUR)\n"
+        "/settings - Open budget settings panel\n"
+        "/help - Show this help"
+    )
+
+
+async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.effective_message:
+        return
+
+    logger.info("Received command: %s", update.effective_message.text)
+    with get_session() as session:
+        runtime_settings = get_runtime_settings(session)
+
+    await update.effective_message.reply_text(
+        "Scheduler active.\n"
+        f"Budget filter: {'ON' if runtime_settings.budget_filter_enabled else 'OFF'}\n"
+        f"Min budget: {runtime_settings.min_budget:.2f} EUR"
+    )
+
+
+async def filter_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.effective_message:
+        return
+
+    logger.info("Received command: %s", update.effective_message.text)
+    args = context.args or []
+    if len(args) != 1:
+        await update.effective_message.reply_text("Usage: /filter 500")
+        return
+
+    raw_value = args[0].strip().replace(",", ".")
+    try:
+        value = float(raw_value)
+    except ValueError:
+        await update.effective_message.reply_text("Usage: /filter 500")
+        return
+
+    with get_session() as session:
+        runtime_settings = update_min_budget(session, value)
+
+    await update.effective_message.reply_text(f"Minimum budget set to {runtime_settings.min_budget:.2f} EUR")
+
+
 async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_message:
         return
 
+    logger.info("Received command: %s", update.effective_message.text)
     with get_session() as session:
         runtime_settings = get_runtime_settings(session)
 

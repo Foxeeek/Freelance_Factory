@@ -11,9 +11,10 @@ class OrderService:
         self.session = session
 
     def upsert_order(self, order_in: OrderIn) -> tuple[OrderDB, bool]:
+        external_id = str(order_in.external_id).strip()
         stmt = select(OrderDB).where(
             OrderDB.platform == order_in.platform,
-            OrderDB.external_id == order_in.external_id,
+            OrderDB.external_id == external_id,
         )
         existing = self.session.scalar(stmt)
 
@@ -27,7 +28,7 @@ class OrderService:
 
         order = OrderDB(
             platform=order_in.platform,
-            external_id=order_in.external_id,
+            external_id=external_id,
             title=order_in.title,
             url=order_in.url,
             description=order_in.description,
@@ -40,6 +41,9 @@ class OrderService:
         return order, True
 
     def save_analysis(self, order: OrderDB, analysis: OrderAnalysis) -> None:
+        if analysis is None:
+            return
+
         order.difficulty = analysis.difficulty
         order.codex_fit = analysis.codex_fit
         order.detected_stack = ",".join(analysis.detected_stack)
