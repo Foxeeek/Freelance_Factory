@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from freelance_ai.app.database import Base
@@ -38,6 +38,14 @@ class OrderAnalysis:
     estimated_price_range: tuple[int, int]
     risk_flags: list[str]
     language: str = "en"
+
+
+class Settings(Base):
+    __tablename__ = "settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    budget_filter_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    min_budget: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
 
 
 class OrderDB(Base):

@@ -51,17 +51,19 @@ class OrderScheduler:
             for raw_order in raw_orders:
                 try:
                     normalized = platform.parse(raw_order)
-                    analysis = analyze_order(
-                        normalized,
-                        hourly_rate_eur=self.settings.hourly_rate_eur,
-                        default_language=self.settings.default_language,
-                    )
-
-                    if analysis is None:
-                        logger.info("Skipping non-coding project: %s", normalized.external_id)
-                        continue
 
                     with get_session() as session:
+                        analysis = analyze_order(
+                            normalized,
+                            hourly_rate_eur=self.settings.hourly_rate_eur,
+                            default_language=self.settings.default_language,
+                            session=session,
+                        )
+
+                        if analysis is None:
+                            logger.info("Skipping non-coding project: %s", normalized.external_id)
+                            continue
+
                         service = OrderService(session)
                         order, is_new = service.upsert_order(normalized)
                         service.save_analysis(order, analysis)

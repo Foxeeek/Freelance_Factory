@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import logging
+import re
+
+from sqlalchemy.orm import Session
 
 from freelance_ai.core.models import OrderAnalysis, OrderIn
 from freelance_ai.core.scorer import estimate_hours_range, estimate_price_range
+from freelance_ai.services.settings_service import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -45,28 +49,56 @@ STACK_KEYWORDS = {
     "wordpress",
 }
 
-CODING_KEYWORDS = [
+BUILDABLE_KEYWORDS = [
     "python",
     "django",
     "fastapi",
-    "backend",
-    "frontend",
-    "react",
-    "node",
-    "api",
-    "javascript",
-    "typescript",
     "flask",
-    "sql",
-    "database",
+    "api",
+    "backend",
     "scraper",
     "bot",
     "automation",
+    "parser",
+    "frontend",
+    "react",
+    "vue",
+    "javascript",
+    "typescript",
+    "web app",
+    "website",
+    "landing page",
+    "html",
+    "css",
+    "wordpress",
+    "shopify",
+    "opencart",
+    "bitrix",
+    "cms",
+    "plugin",
+    "woocommerce",
+    "ios",
+    "android",
+    "mobile app",
+    "pwa",
+    "php",
+    "laravel",
     "ai",
+    "machine learning",
     "ml",
-    "devops",
+    "chatbot",
+    "openai",
+    "sql",
+    "database",
+    "postgres",
+    "mysql",
+    "integration",
+    "telegram bot",
+    "payment system",
 ]
-MARKETING_KEYWORDS = ["seo", "marketing", "smm", "ads"]
+
+SEO_KEYWORDS = ["seo"]
+MARKETING_KEYWORDS = ["marketing", "smm", "ads"]
 TRANSLATION_KEYWORDS = ["translation", "translate", "перевод", "переклад"]
 
 _skipped_projects_count = 0
@@ -75,23 +107,52 @@ _skipped_projects_count = 0
 def detect_category(title: str, description: str) -> str:
     text = f"{title} {description}".lower()
 
-    if any(keyword in text for keyword in CODING_KEYWORDS):
-        return "coding"
-    if any(keyword in text for keyword in MARKETING_KEYWORDS):
-        return "marketing"
+    if any(keyword in text for keyword in BUILDABLE_KEYWORDS):
+        return "buildable"
     if any(keyword in text for keyword in TRANSLATION_KEYWORDS):
         return "translation"
+    if any(keyword in text for keyword in SEO_KEYWORDS):
+        return "seo"
+    if any(keyword in text for keyword in MARKETING_KEYWORDS):
+        return "marketing"
     return "other"
 
 
-def analyze_order(order: OrderIn, hourly_rate_eur: int, default_language: str = "en") -> OrderAnalysis | None:
+def _parse_budget_value(value: str | None) -> float | None:
+    if value is None:
+        return None
+    cleaned = value.replace(" ", "").replace(",", ".")
+    matches = re.findall(r"\d+(?:\.\d+)?", cleaned)
+    if not matches:
+        return None
+    try:
+        return float(matches[0])
+    except ValueError:
+        return None
+
+
+def analyze_order(
+    order: OrderIn,
+    hourly_rate_eur: int,
+    default_language: str = "en",
+    session: Session | None = None,
+) -> OrderAnalysis | None:
     global _skipped_projects_count
 
     category = detect_category(order.title, order.description)
-    if category != "coding":
+    logger.info("Category detected: %s", category)
+
+    if category == "other":
         _skipped_projects_count += 1
-        logger.info("Skipped non-coding projects: %d", _skipped_projects_count)
+        logger.info("Skipped non-buildable projects: %d", _skipped_projects_count)
         return None
+
+    if session is not None:
+        app_settings = get_settings(session)
+        budget_value = _parse_budget_value(order.budget)
+        if app_settings.budget_filter_enabled and budget_value is not None and budget_value < app_settings.min_budget:
+            logger.info("Filtered by budget")
+            return None
 
     text = f"{order.title} {order.description}".lower()
 

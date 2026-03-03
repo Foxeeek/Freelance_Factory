@@ -5,7 +5,7 @@ import logging
 
 from freelance_ai.app.config import get_settings
 from freelance_ai.app.database import init_db
-from freelance_ai.bot.handlers import build_callback_handler
+from freelance_ai.bot.handlers import build_bot_handlers
 from freelance_ai.bot.telegram_bot import TelegramNotifier
 from freelance_ai.services.scheduler import OrderScheduler
 
@@ -17,7 +17,8 @@ async def run() -> None:
 
     notifier = TelegramNotifier(settings)
     app = notifier.build_application()
-    app.add_handler(build_callback_handler())
+    for handler in build_bot_handlers():
+        app.add_handler(handler)
 
     scheduler = OrderScheduler(settings, notifier)
     scheduler.start()
