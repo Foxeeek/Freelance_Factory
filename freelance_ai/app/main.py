@@ -36,6 +36,7 @@ async def run() -> None:
         while True:
             await asyncio.sleep(3600)
     finally:
+        await scheduler.stop()
         await app.updater.stop()
         await app.stop()
         await app.shutdown()
