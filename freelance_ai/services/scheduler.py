@@ -57,6 +57,10 @@ class OrderScheduler:
                         default_language=self.settings.default_language,
                     )
 
+                    if analysis is None:
+                        logger.info("Skipping non-coding project: %s", normalized.external_id)
+                        continue
+
                     with get_session() as session:
                         service = OrderService(session)
                         order, is_new = service.upsert_order(normalized)
